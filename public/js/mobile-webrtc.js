@@ -52,7 +52,11 @@ export class StreamerWebRTC {
     // Try screen sharing; fall back to camera on devices that don't support it
     // (iOS Safari does NOT support getDisplayMedia as of early 2025, so camera
     // is the realistic option on iPhone).
-    if (navigator.mediaDevices.getDisplayMedia) {
+    // Mobile browsers (iOS Safari, Chrome Android) don't support getDisplayMedia.
+    // Detect mobile and go straight to camera to avoid the "capture failed" error.
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (!isMobile && navigator.mediaDevices.getDisplayMedia) {
       this.log('Requesting screen share permission…', 'info');
       try {
         this.localStream = await navigator.mediaDevices.getDisplayMedia({
@@ -64,11 +68,11 @@ export class StreamerWebRTC {
           this.log('Screen share permission denied', 'error');
           throw new Error('PERMISSION_DENIED');
         }
-        this.log(`getDisplayMedia failed: ${err.message} – falling back to camera`, 'warn');
+        this.log(`getDisplayMedia failed (${err.message}) – falling back to camera`, 'warn');
         this.localStream = await this._getCameraStream();
       }
     } else {
-      this.log('getDisplayMedia not available – using camera', 'warn');
+      this.log(isMobile ? 'Mobile detected – using camera' : 'getDisplayMedia unavailable – using camera', 'warn');
       this.localStream = await this._getCameraStream();
     }
 
@@ -242,9 +246,16 @@ export class StreamerWebRTC {
 
   async _getCameraStream() {
     this.log('Requesting camera access…', 'info');
-    return navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    });
+    try {
+      // Try rear camera first
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+    } catch (err) {
+      this.log(`Rear camera failed (${err.message}), trying any camera…`, 'warn');
+      // Fall back to any available camera with minimal constraints
+      return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    }
   }
 }
