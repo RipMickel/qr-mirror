@@ -7,6 +7,10 @@
  *  3. When a viewer signals ready → create offer + send it
  *  4. Handle incoming answers and ICE candidates per viewer
  *  5. Stop all streams on destroy
+ *
+ * FIX: viewer-ready signals that arrive BEFORE capture starts are now queued
+ * and replayed once localStream is available, preventing the silent deadlock
+ * where the offer was dropped and the viewer never received a stream.
  */
 
 import { onSignal, sendSignal } from './socket-client.js';
@@ -31,6 +35,13 @@ export class StreamerWebRTC {
 
     /** @type {MediaStream|null} */
     this.localStream = null;
+
+    /**
+     * Viewers that sent viewer-ready BEFORE capture started.
+     * Replayed once localStream is available.
+     * @type {string[]}
+     */
+    this._pendingViewers = [];
 
     /**
      * Map of viewerSocketId → RTCPeerConnection
@@ -93,6 +104,17 @@ export class StreamerWebRTC {
 
     this.log('Capture started ✓', 'ok');
     this.onStateChange('capturing');
+
+    // FIX: replay any viewer-ready signals that arrived before capture started
+    if (this._pendingViewers.length > 0) {
+      this.log(`Replaying ${this._pendingViewers.length} queued viewer-ready signal(s)…`, 'info');
+      const queued = [...this._pendingViewers];
+      this._pendingViewers = [];
+      for (const viewerSocketId of queued) {
+        await this._createOfferForViewer(viewerSocketId);
+      }
+    }
+
     return this.localStream;
   }
 
@@ -103,6 +125,7 @@ export class StreamerWebRTC {
     // Stop media tracks
     this.localStream?.getTracks().forEach((t) => t.stop());
     this.localStream = null;
+    this._pendingViewers = [];
 
     if (this.previewEl) this.previewEl.srcObject = null;
 
@@ -124,10 +147,16 @@ export class StreamerWebRTC {
     // A viewer is ready to receive an offer
     onSignal('viewer-ready', ({ viewerSocketId }) => {
       this.log(`Viewer ready: ${viewerSocketId}`, 'info');
+
       if (!this.localStream) {
-        this.log('No local stream yet – viewer will re-try after capture', 'warn');
+        // FIX: queue instead of silently dropping
+        this.log('No local stream yet – queuing viewer until capture starts', 'warn');
+        if (!this._pendingViewers.includes(viewerSocketId)) {
+          this._pendingViewers.push(viewerSocketId);
+        }
         return;
       }
+
       this._createOfferForViewer(viewerSocketId);
     });
 
@@ -145,6 +174,8 @@ export class StreamerWebRTC {
     // A viewer disconnected
     onSignal('viewer-left', ({ viewerSocketId }) => {
       this.log(`Viewer left: ${viewerSocketId}`, 'warn');
+      // Also remove from pending queue if they disconnect before capture
+      this._pendingViewers = this._pendingViewers.filter((id) => id !== viewerSocketId);
       this._closeViewerConnection(viewerSocketId);
     });
   }
