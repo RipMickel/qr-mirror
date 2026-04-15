@@ -5,8 +5,10 @@
 
 /* ── Root overrides for mobile ──────────────────────────────────────────────── */
 html, body {
-  height     : 100%;
-  overflow   : hidden;
+  height     : auto;
+  min-height : 100%;
+  overflow-x : hidden;
+  overflow-y : auto;
   touch-action: manipulation;
 }
 
@@ -15,12 +17,12 @@ html, body {
   display        : flex;
   flex-direction : column;
   align-items    : center;
-  justify-content: center;
+  justify-content: flex-start;
   min-height     : 100dvh;
-  padding        : 24px 20px 40px;
+  padding        : 24px 20px 60px;
   gap            : 28px;
   position       : relative;
-  overflow       : hidden;
+  overflow-x     : hidden;
 }
 
 /* Background gradient mesh */
