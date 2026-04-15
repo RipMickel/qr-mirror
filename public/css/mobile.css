@@ -1,0 +1,311 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   mobile.css – Phone Streamer Page Styles
+   Mobile-first, touch-friendly, full-screen layout.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Root overrides for mobile ──────────────────────────────────────────────── */
+html, body {
+  height     : 100%;
+  overflow   : hidden;
+  touch-action: manipulation;
+}
+
+/* ── Full-page layout ──────────────────────────────────────────────────────── */
+.mobile-layout {
+  display        : flex;
+  flex-direction : column;
+  align-items    : center;
+  justify-content: center;
+  min-height     : 100dvh;
+  padding        : 24px 20px 40px;
+  gap            : 28px;
+  position       : relative;
+  overflow       : hidden;
+}
+
+/* Background gradient mesh */
+.mobile-layout::before {
+  content     : '';
+  position    : fixed;
+  inset       : 0;
+  background  :
+    radial-gradient(ellipse 60% 40% at 20% 20%, rgba(0,229,255,0.05) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 80%, rgba(0,229,255,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ── Header area ────────────────────────────────────────────────────────────── */
+.mobile-header {
+  display        : flex;
+  flex-direction : column;
+  align-items    : center;
+  gap            : 6px;
+  text-align     : center;
+}
+
+.mobile-logo {
+  width           : 52px;
+  height          : 52px;
+  background      : var(--accent-lo);
+  border          : 1px solid var(--accent-md);
+  border-radius   : var(--radius-md);
+  display         : flex;
+  align-items     : center;
+  justify-content : center;
+  font-size       : 1.5rem;
+  margin-bottom   : 8px;
+  box-shadow      : var(--glow);
+}
+
+.mobile-title {
+  font-family  : var(--font-mono);
+  font-size    : 1.3rem;
+  color        : var(--text-pri);
+  letter-spacing: 0.04em;
+}
+
+.mobile-subtitle {
+  font-size  : 0.82rem;
+  color      : var(--text-dim);
+}
+
+/* ── Room badge ─────────────────────────────────────────────────────────────── */
+.room-badge {
+  display        : flex;
+  flex-direction : column;
+  align-items    : center;
+  gap            : 4px;
+  padding        : 14px 28px;
+  background     : var(--bg-1);
+  border         : 1px solid var(--border);
+  border-radius  : var(--radius-md);
+  width          : 100%;
+  max-width      : 320px;
+}
+
+.room-badge-label {
+  font-family  : var(--font-mono);
+  font-size    : 0.65rem;
+  color        : var(--text-dim);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.room-badge-id {
+  font-family  : var(--font-mono);
+  font-size    : 1.5rem;
+  letter-spacing: 0.2em;
+  color        : var(--accent);
+}
+
+/* ── Main action card ───────────────────────────────────────────────────────── */
+.action-card {
+  width          : 100%;
+  max-width      : 360px;
+  display        : flex;
+  flex-direction : column;
+  align-items    : center;
+  gap            : 20px;
+  padding        : 28px 24px;
+  background     : var(--bg-1);
+  border         : 1px solid var(--border);
+  border-radius  : var(--radius-lg);
+  box-shadow     : var(--shadow-md);
+}
+
+/* ── Permission illustration ────────────────────────────────────────────────── */
+.permission-illus {
+  position       : relative;
+  width          : 90px;
+  height         : 90px;
+}
+
+.permission-illus .phone-icon {
+  width           : 90px;
+  height          : 90px;
+  background      : var(--bg-0);
+  border          : 2px solid var(--border);
+  border-radius   : 20px;
+  display         : flex;
+  align-items     : center;
+  justify-content : center;
+  font-size       : 2.5rem;
+  position        : relative;
+  z-index         : 1;
+}
+
+.permission-illus::after {
+  content         : '';
+  position        : absolute;
+  inset           : -8px;
+  border          : 1px dashed var(--accent-md);
+  border-radius   : 26px;
+  animation       : pulse 2s ease-in-out infinite;
+}
+
+/* ── Start/stop button – large touch target ──────────────────────────────── */
+.stream-btn {
+  width           : 100%;
+  padding         : 18px 24px;
+  border          : 2px solid var(--accent);
+  border-radius   : var(--radius-md);
+  background      : var(--accent);
+  color           : #000;
+  font-family     : var(--font-body);
+  font-size       : 1rem;
+  font-weight     : 600;
+  cursor          : pointer;
+  display         : flex;
+  align-items     : center;
+  justify-content : center;
+  gap             : 10px;
+  transition      : all var(--transition);
+  user-select     : none;
+  -webkit-tap-highlight-color: transparent;
+  letter-spacing  : 0.02em;
+}
+
+.stream-btn:active { transform: scale(0.97); }
+
+.stream-btn.streaming {
+  background  : transparent;
+  color       : var(--red);
+  border-color: var(--red);
+}
+
+.stream-btn.streaming:hover {
+  background: rgba(255,23,68,0.10);
+}
+
+.stream-btn:disabled {
+  opacity: 0.4;
+  cursor : not-allowed;
+}
+
+/* ── Live preview thumbnail ─────────────────────────────────────────────────── */
+.preview-section {
+  width      : 100%;
+  display    : flex;
+  flex-direction: column;
+  gap        : 8px;
+}
+
+.preview-label {
+  font-family  : var(--font-mono);
+  font-size    : 0.68rem;
+  color        : var(--text-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.preview-wrap {
+  width        : 100%;
+  aspect-ratio : 16 / 9;
+  background   : var(--bg-0);
+  border       : 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow     : hidden;
+  display      : flex;
+  align-items  : center;
+  justify-content: center;
+  position     : relative;
+}
+
+#local-preview {
+  width    : 100%;
+  height   : 100%;
+  object-fit: contain;
+}
+
+.preview-placeholder {
+  font-family: var(--font-mono);
+  font-size  : 0.75rem;
+  color      : var(--text-dim);
+}
+
+/* ── Status row ─────────────────────────────────────────────────────────────── */
+.mobile-status-row {
+  display        : flex;
+  align-items    : center;
+  justify-content: space-between;
+  width          : 100%;
+}
+
+/* ── Stats row ──────────────────────────────────────────────────────────────── */
+.mobile-stats {
+  display              : grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap                  : 6px;
+  width                : 100%;
+}
+
+.stat-pill {
+  background   : var(--bg-0);
+  border       : 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding      : 8px 10px;
+  text-align   : center;
+}
+
+.stat-pill-label {
+  font-family  : var(--font-mono);
+  font-size    : 0.58rem;
+  color        : var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.stat-pill-value {
+  font-family  : var(--font-mono);
+  font-size    : 0.9rem;
+  color        : var(--text-pri);
+  margin-top   : 2px;
+}
+
+.stat-pill-value.live { color: var(--green); }
+
+/* ── Log section ────────────────────────────────────────────────────────────── */
+.mobile-log-section {
+  width      : 100%;
+  max-width  : 360px;
+}
+
+.mobile-log-header {
+  display        : flex;
+  align-items    : center;
+  justify-content: space-between;
+  margin-bottom  : 6px;
+}
+
+.mobile-log-title {
+  font-family  : var(--font-mono);
+  font-size    : 0.68rem;
+  color        : var(--text-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── Error toast ────────────────────────────────────────────────────────────── */
+.toast {
+  position        : fixed;
+  bottom          : 28px;
+  left            : 50%;
+  transform       : translateX(-50%) translateY(80px);
+  background      : var(--bg-2);
+  border          : 1px solid var(--red);
+  border-radius   : var(--radius-md);
+  padding         : 12px 20px;
+  font-size       : 0.85rem;
+  color           : var(--red);
+  font-family     : var(--font-mono);
+  max-width       : 90vw;
+  text-align      : center;
+  z-index         : 100;
+  transition      : transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s;
+  opacity         : 0;
+}
+
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity  : 1;
+}

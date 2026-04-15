@@ -1,0 +1,244 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   QR Mirror – Shared Stylesheet
+   Aesthetic: Industrial-minimal. Monochrome base with electric-cyan accent.
+   Font pair : "Share Tech Mono" (display) + "DM Sans" (body)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* ── CSS Variables ─────────────────────────────────────────────────────────── */
+:root {
+  --bg-0:      #0b0c0e;
+  --bg-1:      #12141a;
+  --bg-2:      #1a1d26;
+  --bg-3:      #222538;
+  --border:    #2a2e40;
+  --text-pri:  #e8eaf0;
+  --text-sec:  #8890a8;
+  --text-dim:  #4a5068;
+  --accent:    #00e5ff;
+  --accent-lo: rgba(0, 229, 255, 0.10);
+  --accent-md: rgba(0, 229, 255, 0.25);
+  --green:     #00e676;
+  --red:       #ff1744;
+  --yellow:    #ffd740;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.40);
+  --shadow-md: 0 6px 24px rgba(0,0,0,0.55);
+  --shadow-lg: 0 12px 48px rgba(0,0,0,0.70);
+  --glow:      0 0 20px rgba(0, 229, 255, 0.35);
+
+  --font-mono: 'Share Tech Mono', monospace;
+  --font-body: 'DM Sans', sans-serif;
+
+  --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+body {
+  font-family   : var(--font-body);
+  background    : var(--bg-0);
+  color         : var(--text-pri);
+  min-height    : 100dvh;
+  line-height   : 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x    : hidden;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 6px; }
+::-webkit-scrollbar-track  { background: var(--bg-1); }
+::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 3px; }
+
+/* ── Typography ────────────────────────────────────────────────────────────── */
+h1, h2, h3 { font-family: var(--font-mono); letter-spacing: -0.03em; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); }
+h2 { font-size: clamp(1.1rem, 2.5vw, 1.5rem); color: var(--text-sec); }
+p  { color: var(--text-sec); }
+
+/* ── Links ─────────────────────────────────────────────────────────────────── */
+a { color: var(--accent); text-decoration: none; transition: opacity var(--transition); }
+a:hover { opacity: 0.75; }
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
+.btn {
+  display         : inline-flex;
+  align-items     : center;
+  gap             : 8px;
+  padding         : 12px 24px;
+  border          : 1px solid var(--border);
+  border-radius   : var(--radius-sm);
+  background      : var(--bg-2);
+  color           : var(--text-pri);
+  font-family     : var(--font-body);
+  font-size       : 0.9rem;
+  font-weight     : 500;
+  cursor          : pointer;
+  transition      : all var(--transition);
+  white-space     : nowrap;
+  user-select     : none;
+}
+.btn:hover { background: var(--bg-3); border-color: var(--accent); color: var(--accent); }
+.btn:active { transform: scale(0.97); }
+
+.btn--primary {
+  background   : var(--accent);
+  border-color : var(--accent);
+  color        : #000;
+  font-weight  : 600;
+}
+.btn--primary:hover {
+  background: #33eaff;
+  border-color: #33eaff;
+  color: #000;
+  box-shadow: var(--glow);
+}
+
+.btn--danger {
+  border-color: var(--red);
+  color       : var(--red);
+}
+.btn--danger:hover {
+  background: rgba(255,23,68,0.12);
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor : not-allowed;
+  pointer-events: none;
+}
+
+/* ── Status badge ──────────────────────────────────────────────────────────── */
+.status-badge {
+  display     : inline-flex;
+  align-items : center;
+  gap         : 6px;
+  padding     : 4px 10px;
+  border-radius: 100px;
+  font-family : var(--font-mono);
+  font-size   : 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border      : 1px solid transparent;
+}
+
+.status-badge .dot {
+  width        : 7px;
+  height       : 7px;
+  border-radius: 50%;
+  flex-shrink  : 0;
+}
+
+.status-badge.waiting   { background: rgba(255,215,64,0.08); border-color: rgba(255,215,64,0.30); color: var(--yellow); }
+.status-badge.waiting .dot { background: var(--yellow); animation: pulse 1.6s ease-in-out infinite; }
+
+.status-badge.connected { background: rgba(0,230,118,0.08); border-color: rgba(0,230,118,0.30); color: var(--green); }
+.status-badge.connected .dot { background: var(--green); animation: pulse 2.4s ease-in-out infinite; }
+
+.status-badge.error     { background: rgba(255,23,68,0.08); border-color: rgba(255,23,68,0.30); color: var(--red); }
+.status-badge.error .dot { background: var(--red); }
+
+.status-badge.idle      { background: var(--bg-2); border-color: var(--border); color: var(--text-dim); }
+.status-badge.idle .dot { background: var(--text-dim); }
+
+/* ── Card ──────────────────────────────────────────────────────────────────── */
+.card {
+  background   : var(--bg-1);
+  border       : 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding      : 24px;
+  box-shadow   : var(--shadow-sm);
+}
+
+/* ── Log panel ─────────────────────────────────────────────────────────────── */
+.log-panel {
+  background   : var(--bg-0);
+  border       : 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding      : 12px 16px;
+  font-family  : var(--font-mono);
+  font-size    : 0.75rem;
+  color        : var(--text-dim);
+  max-height   : 180px;
+  overflow-y   : auto;
+  line-height  : 1.8;
+}
+
+.log-panel .log-line { display: block; }
+.log-panel .log-line.info  { color: var(--text-sec); }
+.log-panel .log-line.ok    { color: var(--green); }
+.log-panel .log-line.warn  { color: var(--yellow); }
+.log-panel .log-line.error { color: var(--red); }
+.log-panel .log-line.debug { color: var(--text-dim); }
+
+/* ── Scan decorative corner lines ──────────────────────────────────────────── */
+.qr-frame {
+  position     : relative;
+  display      : inline-block;
+  padding      : 12px;
+  border-radius: var(--radius-md);
+}
+.qr-frame::before, .qr-frame::after,
+.qr-frame > .qr-inner::before, .qr-frame > .qr-inner::after {
+  content      : '';
+  position     : absolute;
+  width        : 22px;
+  height       : 22px;
+  border-color : var(--accent);
+  border-style : solid;
+  border-width : 0;
+}
+.qr-frame::before  { top: 0; left: 0;  border-top-width: 2px; border-left-width: 2px;  border-radius: 4px 0 0 0; }
+.qr-frame::after   { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; border-radius: 0 4px 0 0; }
+.qr-frame > .qr-inner::before { bottom: 0; left: 0;  border-bottom-width: 2px; border-left-width: 2px;  border-radius: 0 0 0 4px; }
+.qr-frame > .qr-inner::after  { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; border-radius: 0 0 4px 0; }
+
+/* ── Animations ────────────────────────────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+@keyframes scanline {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-in { animation: fadeIn 0.4s ease forwards; }
+
+/* ── Utility ───────────────────────────────────────────────────────────────── */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.mono     { font-family: var(--font-mono); }
+.dim      { color: var(--text-dim); }
+.accent   { color: var(--accent); }
+.flex     { display: flex; }
+.flex-col { display: flex; flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.gap-sm   { gap: 8px; }
+.gap-md   { gap: 16px; }
+.gap-lg   { gap: 24px; }
+.text-sm  { font-size: 0.82rem; }
+.text-xs  { font-size: 0.72rem; }
+.mt-sm    { margin-top: 8px; }
+.mt-md    { margin-top: 16px; }
+.mt-lg    { margin-top: 24px; }
+.w-full   { width: 100%; }

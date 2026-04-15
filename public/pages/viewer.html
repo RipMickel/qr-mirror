@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="QR Mirror – PC Viewer" />
+  <title>QR Mirror · Viewer</title>
+
+  <!-- Fonts loaded by shared.css via @import -->
+  <link rel="stylesheet" href="/css/shared.css" />
+  <link rel="stylesheet" href="/css/viewer.css" />
+
+  <!-- Favicon inline SVG -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>" />
+</head>
+<body>
+
+<div class="viewer-layout">
+
+  <!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+
+    <!-- Brand -->
+    <div class="sidebar-brand">
+      <div class="brand-icon">📡</div>
+      <div>
+        <div class="brand-name">QR Mirror</div>
+        <div class="brand-tagline">Screen Streaming System</div>
+      </div>
+    </div>
+
+    <!-- QR Section -->
+    <div class="qr-section animate-in">
+      <span class="qr-section-title">Scan to Connect</span>
+
+      <div class="qr-frame">
+        <div class="qr-inner">
+          <div class="qr-image-wrap">
+            <img id="qr-image" alt="QR code" style="display:none" />
+            <div id="qr-placeholder" class="qr-placeholder">
+              <span style="font-size:2rem">⏳</span>
+              <span>Generating…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Room ID -->
+      <div>
+        <div class="qr-room-label">Room ID</div>
+        <div class="qr-room-id mono" id="room-id-display">——————</div>
+      </div>
+
+      <!-- QR refresh progress bar (hidden when refresh disabled) -->
+      <div class="qr-refresh-bar" id="qr-refresh-bar" style="width:100%">
+        <div class="qr-refresh-bar-fill" id="qr-refresh-bar-fill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Status + stats -->
+    <div class="card animate-in" style="animation-delay:0.1s">
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-item-label">Status</div>
+          <div class="info-item-value">
+            <span id="status-badge" class="status-badge idle">
+              <span class="dot"></span>
+              <span class="badge-text">Idle</span>
+            </span>
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">Viewers</div>
+          <div class="info-item-value mono" id="viewer-count">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="sidebar-controls animate-in" style="animation-delay:0.2s">
+      <button class="btn btn--primary" id="btn-new-session">
+        🔄 New Session
+      </button>
+    </div>
+
+    <!-- Log panel -->
+    <div class="animate-in" style="animation-delay:0.25s">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span class="text-xs mono dim" style="letter-spacing:0.1em;text-transform:uppercase;">Event Log</span>
+        <button class="btn text-xs" style="padding:3px 8px;" onclick="document.getElementById('log-panel').innerHTML=''">Clear</button>
+      </div>
+      <div class="log-panel" id="log-panel">
+        <span class="log-line debug">[system] Viewer ready. Initialising session…</span>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── Main content ──────────────────────────────────────────────────────── -->
+  <main class="main-content">
+
+    <!-- Top bar -->
+    <div class="topbar">
+      <span class="topbar-title mono">LIVE STREAM OUTPUT</span>
+      <div class="topbar-right">
+        <span id="topbar-status" class="status-badge idle">
+          <span class="dot"></span>
+          <span class="badge-text">Idle</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Video stage -->
+    <div class="video-stage">
+      <div class="video-wrapper" id="video-wrapper">
+
+        <!-- Decorative idle overlay -->
+        <div class="idle-overlay" id="idle-overlay">
+          <div class="idle-icon">📱</div>
+          <div class="idle-text">Waiting for phone to connect…</div>
+          <div class="text-xs dim mono mt-sm">Scan the QR code with your phone</div>
+        </div>
+
+        <!-- Video element -->
+        <video
+          id="remote-video"
+          autoplay
+          playsinline
+          muted
+          style="position:relative;z-index:2;"
+        ></video>
+
+        <!-- Floating controls (appear on hover) -->
+        <div class="video-controls">
+          <button class="ctrl-btn" id="btn-mute" title="Mute">🔊</button>
+          <button class="ctrl-btn" id="btn-fullscreen" title="Fullscreen">⛶</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Log area at bottom of main -->
+    <div class="log-area">
+      <div class="log-area-header">
+        <span class="log-area-title">Connection Info</span>
+      </div>
+      <div class="text-xs dim mono" id="connection-info">
+        WebRTC peer-to-peer · Signaling via Socket.IO · STUN/TURN ready
+      </div>
+    </div>
+
+  </main>
+
+</div><!-- /.viewer-layout -->
+
+<!-- Socket.IO client (served automatically by Socket.IO server) -->
+<script src="/socket.io/socket.io.js"></script>
+
+<!-- ES module entry point -->
+<script type="module" src="/js/viewer.js"></script>
+
+</body>
+</html>
