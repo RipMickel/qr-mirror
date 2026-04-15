@@ -7,9 +7,16 @@
  *  3. Receive ICE candidates from the streamer
  *  4. Attach the remote MediaStream to the <video> element
  *  5. Emit 'viewer-ready' to trigger the streamer to begin offering
+ *
+ * FIXES:
+ *  - _attachSignalingListeners now stores named handler refs and removes them
+ *    on destroy(), preventing stale handlers from a previous instance from
+ *    firing and causing "setRemoteDescription: Called in wrong state: stale".
+ *  - webrtc-answer now sends `viewerSocketId` (not `streamerSocketId`) so the
+ *    streamer can look up the correct RTCPeerConnection in its map.
  */
 
-import { onSignal, sendSignal } from './socket-client.js';
+import { onSignal, offSignal, sendSignal } from './socket-client.js';
 
 export class ViewerWebRTC {
   /**
@@ -35,6 +42,11 @@ export class ViewerWebRTC {
     /** @type {string|null} ID of the streamer socket we're paired with */
     this.streamerSocketId = null;
 
+    // Named handler refs so we can remove them on destroy
+    this._onOffer       = null;
+    this._onIce         = null;
+    this._onStreamerLeft = null;
+
     this._attachSignalingListeners();
   }
 
@@ -46,8 +58,9 @@ export class ViewerWebRTC {
     sendSignal('viewer-ready', { roomId: this.roomId });
   }
 
-  /** Cleanly close the peer connection. */
+  /** Cleanly close the peer connection and remove signaling listeners. */
   destroy() {
+    this._detachSignalingListeners();
     this.pc?.close();
     this.pc = null;
     this.log('Peer connection destroyed', 'warn');
@@ -57,26 +70,40 @@ export class ViewerWebRTC {
   // ── Internal ──────────────────────────────────────────────────────────────
 
   _attachSignalingListeners() {
-    // Streamer sent us an offer
-    onSignal('webrtc-offer', ({ sdp, streamerSocketId }) => {
+    // Always detach first so re-instantiation never leaves stale listeners
+    this._detachSignalingListeners();
+
+    // FIX Bug 1: store named refs so we can remove them precisely
+    this._onOffer = ({ sdp, streamerSocketId }) => {
       this.log(`Received WebRTC offer from ${streamerSocketId}`, 'info');
       this.streamerSocketId = streamerSocketId;
       this._handleOffer(sdp);
-    });
+    };
 
-    // ICE candidate from the streamer
-    onSignal('ice-candidate', ({ candidate, fromSocketId }) => {
+    this._onIce = ({ candidate, fromSocketId }) => {
       // Only handle candidates from our paired streamer
       if (fromSocketId && fromSocketId !== this.streamerSocketId) return;
       this._addIceCandidate(candidate);
-    });
+    };
 
-    // Streamer disconnected
-    onSignal('streamer-left', ({ reason }) => {
+    this._onStreamerLeft = ({ reason }) => {
       this.log(`Streamer disconnected (${reason})`, 'warn');
       this.destroy();
       this.onStateChange('streamer-left');
-    });
+    };
+
+    onSignal('webrtc-offer',  this._onOffer);
+    onSignal('ice-candidate', this._onIce);
+    onSignal('streamer-left', this._onStreamerLeft);
+  }
+
+  _detachSignalingListeners() {
+    if (this._onOffer)        offSignal('webrtc-offer',  this._onOffer);
+    if (this._onIce)          offSignal('ice-candidate', this._onIce);
+    if (this._onStreamerLeft)  offSignal('streamer-left', this._onStreamerLeft);
+    this._onOffer       = null;
+    this._onIce         = null;
+    this._onStreamerLeft = null;
   }
 
   /** Create (or re-create) the RTCPeerConnection. */
@@ -93,7 +120,7 @@ export class ViewerWebRTC {
     this.pc.onicecandidate = ({ candidate }) => {
       if (candidate) {
         sendSignal('ice-candidate', {
-          roomId      : this.roomId,
+          roomId        : this.roomId,
           candidate,
           targetSocketId: this.streamerSocketId,
         });
@@ -114,7 +141,6 @@ export class ViewerWebRTC {
       this.log('Remote track received ✓', 'ok');
       this.onStateChange('streaming');
 
-      // Attach the first available stream (handles both unified-plan + plan-b)
       const [stream] = event.streams;
       if (stream && this.videoEl.srcObject !== stream) {
         this.videoEl.srcObject = stream;
@@ -147,10 +173,12 @@ export class ViewerWebRTC {
       await this.pc.setLocalDescription(answer);
       this.log('Local description set (answer)', 'debug');
 
+      // FIX Bug 2: send `viewerSocketId` (our own socket ID) not `streamerSocketId`
+      // so the streamer can look us up in its peerConnections map.
       sendSignal('webrtc-answer', {
-        roomId          : this.roomId,
-        sdp             : this.pc.localDescription,
-        streamerSocketId: this.streamerSocketId,
+        roomId        : this.roomId,
+        sdp           : this.pc.localDescription,
+        viewerSocketId: this.socketId,
       });
       this.log('Answer sent to streamer', 'info');
     } catch (err) {
