@@ -28,7 +28,7 @@ const apiRouter               = require('./routes');
 
 // ── Config ───────────────────────────────────────────────────────────────────
 const PORT       = parseInt(process.env.PORT || '8080', 10);
-const HOST       = process.env.HOST || '172.16.80.216';
+const HOST       = process.env.HOST || '0.0.0.0';
 const CORS_ORIGINS = process.env.CORS_ORIGINS || '*';
 const PUBLIC_DIR   = path.resolve(__dirname, '../../public');
 
