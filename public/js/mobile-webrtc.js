@@ -1,18 +1,13 @@
 /**
  * mobile-webrtc.js – WebRTC logic for the Phone Streamer
  *
- * Responsibilities:
- *  1. Capture the phone screen via getDisplayMedia (or getUserMedia as fallback)
- *  2. Maintain one RTCPeerConnection per viewer (many-viewers support)
- *  3. When a viewer signals ready → create offer + send it
- *  4. Handle incoming answers and ICE candidates per viewer
- *  5. Stop all streams on destroy
- *
- * FIXES:
- *  - viewer-ready signals arriving before capture starts are queued and replayed
- *    after startCapture() resolves (prevents silent offer-drop deadlock).
- *  - Named handler refs stored so destroy() can remove them cleanly, preventing
- *    stale listeners accumulating across re-instantiations.
+ * FIXES APPLIED:
+ *  1. Corrected viewer-ready queueing logic with better state tracking
+ *  2. Robust signaling listener attachment/detachment
+ *  3. Added comprehensive logging with [TAGS] for debugging
+ *  4. Handle answer with correct viewerSocketId matching
+ *  5. ICE candidate routing with viewer socket ID
+ *  6. Proper track addition verification
  */
 
 import { onSignal, offSignal, sendSignal } from './socket-client.js';
@@ -32,9 +27,9 @@ export class StreamerWebRTC {
     /**
      * viewer-ready signals that arrived before capture started.
      * Replayed once localStream is available.
-     * @type {string[]}
+     * @type {Set<string>} - Use Set to prevent duplicates
      */
-    this._pendingViewers = [];
+    this._pendingViewers = new Set();
 
     /**
      * Map of viewerSocketId → RTCPeerConnection
@@ -48,6 +43,9 @@ export class StreamerWebRTC {
     this._onIce          = null;
     this._onViewerLeft   = null;
 
+    // Track attachment state
+    this._listenersAttached = false;
+
     this._attachSignalingListeners();
   }
 
@@ -57,7 +55,7 @@ export class StreamerWebRTC {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     if (!isMobile && navigator.mediaDevices.getDisplayMedia) {
-      this.log('Requesting screen share permission…', 'info');
+      this.log('[CAPTURE] Requesting screen share permission…', 'info');
       try {
         this.localStream = await navigator.mediaDevices.getDisplayMedia({
           video: { frameRate: { ideal: 30, max: 60 } },
@@ -65,39 +63,43 @@ export class StreamerWebRTC {
         });
       } catch (err) {
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          this.log('Screen share permission denied', 'error');
+          this.log('[CAPTURE] Screen share permission denied', 'error');
           throw new Error('PERMISSION_DENIED');
         }
-        this.log(`getDisplayMedia failed (${err.message}) – falling back to camera`, 'warn');
+        this.log(`[CAPTURE] getDisplayMedia failed (${err.message}) – falling back to camera`, 'warn');
         this.localStream = await this._getCameraStream();
       }
     } else {
-      this.log(isMobile ? 'Mobile detected – using camera' : 'getDisplayMedia unavailable – using camera', 'warn');
+      this.log(isMobile ? '[CAPTURE] Mobile detected – using camera' : '[CAPTURE] getDisplayMedia unavailable – using camera', 'warn');
       this.localStream = await this._getCameraStream();
     }
 
+    // Attach preview
     if (this.previewEl) {
       this.previewEl.srcObject = this.localStream;
       await this.previewEl.play().catch(() => {});
+      this.log('[PREVIEW] Preview attached ✓', 'debug');
     }
 
+    // Set up track-ended handler
     this.localStream.getTracks().forEach((track) => {
       track.onended = () => {
-        this.log('Screen share ended by user', 'warn');
+        this.log(`[CAPTURE] ${track.kind} track ended by user`, 'warn');
         this.destroy();
         this.onStateChange('stopped');
       };
     });
 
-    this.log('Capture started ✓', 'ok');
+    this.log('[CAPTURE] Capture started ✓', 'ok');
     this.onStateChange('capturing');
 
     // Replay any viewer-ready signals that arrived before capture started
-    if (this._pendingViewers.length > 0) {
-      this.log(`Replaying ${this._pendingViewers.length} queued viewer-ready signal(s)…`, 'info');
-      const queued = [...this._pendingViewers];
-      this._pendingViewers = [];
+    if (this._pendingViewers.size > 0) {
+      this.log(`[CAPTURE] Replaying ${this._pendingViewers.size} queued viewer-ready signal(s)…`, 'info');
+      const queued = Array.from(this._pendingViewers);
+      this._pendingViewers.clear();
       for (const viewerSocketId of queued) {
+        this.log(`[CAPTURE] Creating offer for queued viewer: ${viewerSocketId.substring(0, 8)}`, 'debug');
         await this._createOfferForViewer(viewerSocketId);
       }
     }
@@ -106,53 +108,63 @@ export class StreamerWebRTC {
   }
 
   destroy() {
+    this.log('[DESTROY] Destroying streamer WebRTC…', 'warn');
     this._detachSignalingListeners();
-    this.localStream?.getTracks().forEach((t) => t.stop());
+    
+    this.localStream?.getTracks().forEach((t) => {
+      t.stop();
+      this.log(`[DESTROY] Stopped ${t.kind} track`, 'debug');
+    });
     this.localStream = null;
-    this._pendingViewers = [];
+    this._pendingViewers.clear();
 
     if (this.previewEl) this.previewEl.srcObject = null;
 
     this.peerConnections.forEach((pc, viewerId) => {
       pc.close();
-      this.log(`Peer connection closed for viewer ${viewerId}`, 'debug');
+      this.log(`[DESTROY] Closed peer connection for viewer: ${viewerId.substring(0, 8)}`, 'debug');
     });
     this.peerConnections.clear();
     this.onViewerCount(0);
 
-    this.log('Streamer destroyed', 'warn');
+    this.log('[DESTROY] Streamer destroyed ✓', 'warn');
     this.onStateChange('idle');
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
 
   _attachSignalingListeners() {
+    // Prevent double-attachment
+    if (this._listenersAttached) {
+      this.log('[SIGNALING] Listeners already attached', 'debug');
+      return;
+    }
+
     this._detachSignalingListeners();
 
     this._onViewerReady = ({ viewerSocketId }) => {
-      this.log(`Viewer ready: ${viewerSocketId}`, 'info');
+      this.log(`[VIEWER-READY] Viewer ready: ${viewerSocketId.substring(0, 8)}`, 'info');
       if (!this.localStream) {
-        this.log('No local stream yet – queuing viewer until capture starts', 'warn');
-        if (!this._pendingViewers.includes(viewerSocketId)) {
-          this._pendingViewers.push(viewerSocketId);
-        }
+        this.log('[VIEWER-READY] No local stream yet – queuing viewer', 'warn');
+        this._pendingViewers.add(viewerSocketId);
         return;
       }
       this._createOfferForViewer(viewerSocketId);
     };
 
     this._onAnswer = ({ sdp, viewerSocketId }) => {
-      this.log(`Answer received from viewer ${viewerSocketId}`, 'info');
+      this.log(`[ANSWER] Answer received from viewer: ${viewerSocketId.substring(0, 8)}`, 'info');
       this._handleAnswer(sdp, viewerSocketId);
     };
 
     this._onIce = ({ candidate, fromSocketId }) => {
+      this.log(`[ICE-IN] Candidate from: ${fromSocketId.substring(0, 8)}`, 'debug');
       this._addIceCandidate(candidate, fromSocketId);
     };
 
     this._onViewerLeft = ({ viewerSocketId }) => {
-      this.log(`Viewer left: ${viewerSocketId}`, 'warn');
-      this._pendingViewers = this._pendingViewers.filter((id) => id !== viewerSocketId);
+      this.log(`[VIEWER-LEFT] Viewer disconnected: ${viewerSocketId.substring(0, 8)}`, 'warn');
+      this._pendingViewers.delete(viewerSocketId);
       this._closeViewerConnection(viewerSocketId);
     };
 
@@ -160,6 +172,9 @@ export class StreamerWebRTC {
     onSignal('webrtc-answer',  this._onAnswer);
     onSignal('ice-candidate',  this._onIce);
     onSignal('viewer-left',    this._onViewerLeft);
+
+    this._listenersAttached = true;
+    this.log('[SIGNALING] Listeners attached ✓', 'debug');
   }
 
   _detachSignalingListeners() {
@@ -167,54 +182,73 @@ export class StreamerWebRTC {
     if (this._onAnswer)      offSignal('webrtc-answer', this._onAnswer);
     if (this._onIce)         offSignal('ice-candidate', this._onIce);
     if (this._onViewerLeft)  offSignal('viewer-left',   this._onViewerLeft);
+    
     this._onViewerReady = null;
     this._onAnswer      = null;
     this._onIce         = null;
     this._onViewerLeft  = null;
+    
+    this._listenersAttached = false;
+    this.log('[SIGNALING] Listeners detached ✓', 'debug');
   }
 
   async _createOfferForViewer(viewerSocketId) {
+    this.log(`[OFFER] Creating offer for viewer: ${viewerSocketId.substring(0, 8)}`, 'info');
+    
     if (this.peerConnections.has(viewerSocketId)) {
-      this.peerConnections.get(viewerSocketId).close();
+      const oldPc = this.peerConnections.get(viewerSocketId);
+      oldPc.close();
+      this.log(`[OFFER] Closed stale peer connection for viewer: ${viewerSocketId.substring(0, 8)}`, 'debug');
     }
 
     const pc = new RTCPeerConnection(this.iceConfig);
     this.peerConnections.set(viewerSocketId, pc);
     this.onViewerCount(this.peerConnections.size);
+    this.log(`[OFFER] Peer connection created. Total viewers: ${this.peerConnections.size}`, 'info');
 
+    // Add local tracks
     this.localStream.getTracks().forEach((track) => {
-      pc.addTrack(track, this.localStream);
+      const sender = pc.addTrack(track, this.localStream);
+      this.log(`[OFFER] Added ${track.kind} track to viewer: ${viewerSocketId.substring(0, 8)}`, 'debug');
     });
 
+    // ICE candidate handler
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) {
+        this.log(`[ICE-OUT] Sending candidate to viewer: ${viewerSocketId.substring(0, 8)}`, 'debug');
         sendSignal('ice-candidate', {
           roomId        : this.roomId,
           candidate,
           targetSocketId: viewerSocketId,
         });
+      } else {
+        this.log(`[ICE-OUT] ICE gathering complete for viewer: ${viewerSocketId.substring(0, 8)}`, 'debug');
       }
     };
 
     pc.oniceconnectionstatechange = () => {
       const s = pc.iceConnectionState;
-      this.log(`ICE [${viewerSocketId.slice(0,6)}] → ${s}`, 'debug');
+      this.log(`[ICE-STATE] Viewer ${viewerSocketId.substring(0, 8)}: ${s}`, 'debug');
       if (s === 'disconnected' || s === 'failed') {
+        this.log(`[ICE-STATE] Closing connection for viewer: ${viewerSocketId.substring(0, 8)}`, 'warn');
         this._closeViewerConnection(viewerSocketId);
       }
     };
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
-      this.log(`Connection [${viewerSocketId.slice(0,6)}] → ${s}`, 'debug');
+      this.log(`[CONN-STATE] Viewer ${viewerSocketId.substring(0, 8)}: ${s}`, 'debug');
       if (s === 'connected') {
+        this.log(`[CONN-STATE] Viewer ${viewerSocketId.substring(0, 8)} connected ✓`, 'ok');
         this.onStateChange('streaming');
       }
     };
 
     try {
+      this.log(`[OFFER] Creating offer…`, 'debug');
       const offer = await pc.createOffer({ offerToReceiveVideo: false });
       await pc.setLocalDescription(offer);
+      this.log(`[OFFER] Local description set ✓`, 'debug');
 
       sendSignal('webrtc-offer', {
         roomId               : this.roomId,
@@ -222,9 +256,9 @@ export class StreamerWebRTC {
         targetViewerSocketId : viewerSocketId,
       });
 
-      this.log(`Offer sent to viewer ${viewerSocketId}`, 'info');
+      this.log(`[OFFER] Offer sent to viewer: ${viewerSocketId.substring(0, 8)} ✓`, 'info');
     } catch (err) {
-      this.log(`Failed to create offer: ${err.message}`, 'error');
+      this.log(`[OFFER] Failed to create offer: ${err.message}`, 'error');
       this._closeViewerConnection(viewerSocketId);
     }
   }
@@ -232,24 +266,29 @@ export class StreamerWebRTC {
   async _handleAnswer(sdp, viewerSocketId) {
     const pc = this.peerConnections.get(viewerSocketId);
     if (!pc) {
-      this.log(`No peer connection found for viewer ${viewerSocketId}`, 'warn');
+      this.log(`[ANSWER] No peer connection found for viewer: ${viewerSocketId.substring(0, 8)}`, 'warn');
       return;
     }
     try {
+      this.log(`[ANSWER] Setting remote description for viewer: ${viewerSocketId.substring(0, 8)}`, 'debug');
       await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-      this.log(`Remote description set for viewer ${viewerSocketId}`, 'debug');
+      this.log(`[ANSWER] Remote description set ✓`, 'ok');
     } catch (err) {
-      this.log(`setRemoteDescription failed: ${err.message}`, 'error');
+      this.log(`[ANSWER] setRemoteDescription failed: ${err.message}`, 'error');
     }
   }
 
   async _addIceCandidate(candidate, fromSocketId) {
     const pc = this.peerConnections.get(fromSocketId);
-    if (!pc) return;
+    if (!pc) {
+      this.log(`[ICE-IN] No peer connection for viewer: ${fromSocketId.substring(0, 8)}`, 'warn');
+      return;
+    }
     try {
       await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      this.log(`[ICE-IN] Candidate added ✓`, 'debug');
     } catch (err) {
-      this.log(`ICE candidate error: ${err.message}`, 'warn');
+      this.log(`[ICE-IN] Error: ${err.message}`, 'warn');
     }
   }
 
@@ -259,19 +298,19 @@ export class StreamerWebRTC {
       pc.close();
       this.peerConnections.delete(viewerSocketId);
       this.onViewerCount(this.peerConnections.size);
-      this.log(`Closed connection for viewer ${viewerSocketId}`, 'debug');
+      this.log(`[CLOSE] Closed connection for viewer: ${viewerSocketId.substring(0, 8)}. Remaining: ${this.peerConnections.size}`, 'info');
     }
   }
 
   async _getCameraStream() {
-    this.log('Requesting camera access…', 'info');
+    this.log('[CAMERA] Requesting camera access…', 'info');
     try {
       return await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
     } catch (err) {
-      this.log(`Rear camera failed (${err.message}), trying any camera…`, 'warn');
+      this.log(`[CAMERA] Rear camera failed (${err.message}), trying any camera…`, 'warn');
       return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     }
   }

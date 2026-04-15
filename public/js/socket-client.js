@@ -1,59 +1,59 @@
 /**
- * socket-client.js – Thin wrapper around socket.io-client
- *
- * Provides a single shared socket instance and a lightweight event bus so
- * that the WebRTC modules can listen for signaling events without importing
- * socket.io themselves.
- *
- * Usage:
- *   import { socket, onSignal, sendSignal } from './socket-client.js';
+ * socket-client.js – Socket.IO wrapper with QR token auth
  */
 
-// ── Create the socket connection ─────────────────────────────────────────────
-// socket.io client is loaded from the server's static bundle at /socket.io/socket.io.js
+// Extract room ID and token from URL
+const params = new URLSearchParams(window.location.search);
+const roomId = params.get('room');
+const qrToken = params.get('token');
+
+// Create socket with auth
 const socket = io({
-  transports       : ['websocket', 'polling'],
+  transports: ['websocket', 'polling'],
   reconnectionAttempts: 5,
-  reconnectionDelay   : 1500,
-  timeout             : 10000,
+  reconnectionDelay: 1500,
+  reconnectionDelayMax: 10000,
+  timeout: 10000,
+  auth: { roomId, token: qrToken },
 });
 
-// ── Simple event bus ─────────────────────────────────────────────────────────
+// ── Simple event bus ──────────────────────────────────────────────────────────
 /** @type {Map<string, Set<Function>>} */
 const _listeners = new Map();
 
-/**
- * Subscribe to a signaling event.
- * @param {string}   event
- * @param {Function} handler
- */
 function onSignal(event, handler) {
   if (!_listeners.has(event)) _listeners.set(event, new Set());
-  _listeners.get(event).add(handler);
+
+  const handlers = _listeners.get(event);
+  if (handlers.has(handler)) {
+    console.warn(`[Socket] Handler already registered for: ${event}`);
+    return;
+  }
+
+  handlers.add(handler);
   socket.on(event, handler);
 }
 
-/**
- * Remove a signaling event listener.
- */
 function offSignal(event, handler) {
   socket.off(event, handler);
   _listeners.get(event)?.delete(handler);
 }
 
-/**
- * Emit a signaling event.
- */
 function sendSignal(event, data) {
   socket.emit(event, data);
 }
 
-// ── Connection lifecycle logging ─────────────────────────────────────────────
-socket.on('connect',           () => console.info('[Socket] Connected ›', socket.id));
-socket.on('disconnect',  (r)  => console.warn('[Socket] Disconnected ›', r));
-socket.on('reconnecting', (n) => console.info(`[Socket] Reconnecting (attempt ${n})…`));
-socket.on('reconnect_failed',  () => console.error('[Socket] Reconnection failed'));
-socket.on('connect_error', (e) => console.error('[Socket] Connect error ›', e.message));
-socket.on('error-event', (e)  => console.error('[Socket] Server error ›', e.message));
+// ── Connection lifecycle logging ──────────────────────────────────────────────
+socket.on('connect', () => {
+  console.info(`[Socket] ✓ Connected (${socket.id.substring(0, 8)})`);
+});
+
+socket.on('disconnect', (reason) => {
+  console.warn(`[Socket] ✗ Disconnected: ${reason}`);
+});
+
+socket.on('connect_error', (err) => {
+  console.error(`[Socket] ✗ Connect error: ${err.message}`);
+});
 
 export { socket, onSignal, offSignal, sendSignal };
